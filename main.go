@@ -13,10 +13,11 @@ import (
 
 const (
 	TimeInterval = 6 * time.Second
-	DistrictID   = "149"
+	DistrictID   = "392"
 	NumDays      = 2
 	AgeGroup     = 18
-	BotToken     = "YOUR TELEGRAM BOT TOKEN"
+	BotToken     = "YOUR TELEGRAM BOT TOKEN" // Enter Bot Token
+	MessageID    = 12345                     //Enter messageId
 )
 
 type Response struct {
@@ -24,6 +25,7 @@ type Response struct {
 }
 
 type Session struct {
+	SessionID         string `json:"session_id"`
 	CenterID          int32  `json:"center_id"`
 	Name              string `json:"name"`
 	Address           string `json:"address"`
@@ -36,8 +38,10 @@ type Session struct {
 }
 
 func getSlots() []Session {
+
 	date := time.Now()
 	var sessionList []Session
+
 	for i := 0; i < NumDays; i++ {
 		dateString := date.Format("02-01-2006")
 		params := "district_id=" + url.QueryEscape(DistrictID) + "&" +
@@ -53,6 +57,7 @@ func getSlots() []Session {
 			fmt.Print(err.Error())
 			continue
 		}
+
 		var responseData Response
 
 		err = json.NewDecoder(response.Body).Decode(&responseData)
@@ -69,30 +74,10 @@ func getSlots() []Session {
 
 		date = date.AddDate(0, 0, 1)
 	}
-
 	return sessionList
 }
 
-func notifSender(userSet map[int64]bool, bot *tgbotapi.BotAPI) {
-	for {
-		sessions := getSlots()
-
-		for _, session := range sessions {
-			msgString := fmt.Sprintf("Date: %s\nCenter Name: %s\nPincode: %d\nFee Type: %s\nAvailable Capacity: %d\nVaccine: %s\n", session.Date, session.Name, session.Pincode, session.FeeType, session.AvailableCapacity, session.Vaccine)
-			for user := range userSet {
-				log.Println(user)
-
-				msg := tgbotapi.NewMessage(user, msgString)
-
-				bot.Send(msg)
-			}
-		}
-		time.Sleep(TimeInterval)
-	}
-}
-
 func main() {
-
 	bot, err := tgbotapi.NewBotAPI(BotToken)
 	if err != nil {
 		log.Panic(err)
@@ -105,45 +90,19 @@ func main() {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	updates, err := bot.GetUpdatesChan(u)
-	welcomeMsg := "Hi! I am a bot developed by Pranav Kumar. I will notify you if there is a slot available for vaccination for upcoming month in Thane for 18+. To stop getting updates, reply with /stop"
-	goodbyeMsg := "Thank you for using the bot. For getting update reply with /start"
+	sessionSet := make(map[string]bool)
 
-	userSet := make(map[int64]bool)
-
-	go notifSender(userSet, bot)
-
-	for update := range updates {
-		if update.Message == nil { // ignore any non-Message Updates
-			continue
-		}
-
-		if update.Message.Text == "/start" {
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMsg)
-
-			bot.Send(msg)
-			exists := userSet[update.Message.Chat.ID]
+	for {
+		sessions := getSlots()
+		for _, session := range sessions {
+			exists := sessionSet[session.SessionID]
 			if !exists {
-				userSet[update.Message.Chat.ID] = true
+				msgString := fmt.Sprintf("Date: %s\nCenter Name: %s\nPincode: %d\nFee Type: %s\nAvailable Capacity: %d\nVaccine: %s\n", session.Date, session.Name, session.Pincode, session.FeeType, session.AvailableCapacity, session.Vaccine)
+				msg := tgbotapi.NewMessage(MessageID, msgString)
+				bot.Send(msg)
+				sessionSet[session.SessionID] = true
 			}
-
-			continue
 		}
-
-		if update.Message.Text == "/stop" {
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, goodbyeMsg)
-
-			bot.Send(msg)
-			exists := userSet[update.Message.Chat.ID]
-			if exists {
-				delete(userSet, update.Message.Chat.ID)
-			}
-
-			continue
-		}
-
+		time.Sleep(TimeInterval)
 	}
-
-	responseData := getSlots()
-	fmt.Println(responseData)
 }
