@@ -2,4 +2,4 @@
 
 See https://apisetu.gov.in/public/marketplace/api/cowin for more details
 
-Currently serving t.me/provaccn
+Currently serving https://t.me/provaccn
